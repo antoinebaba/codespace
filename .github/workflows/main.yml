@@ -3,8 +3,12 @@ on:
   - workflow_dispatch
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     steps:
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -14,40 +18,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build (latest)
-        uses: docker/build-push-action@v3
-        if: ${{ github.ref == 'refs/heads/main' }}
-        with:
-          build-args: |
-            VCS_REF=${{ github.sha }}
-          load: true
-          tags: cs50/codespace:${{ github.sha }},cs50/codespace:latest
-          cache-from: type=registry,ref=cs50/codespace:buildcache
-          cache-to: type=registry,ref=cs50/codespace:buildcache,mode=max
-
-      - name: Build (develop)
-        uses: docker/build-push-action@v3
-        if: ${{ github.ref == 'refs/heads/develop' }}
-        with:
-          build-args: |
-            VCS_REF=${{ github.sha }}
-          load: true
-          tags: cs50/codespace:${{ github.sha }},cs50/codespace:develop
-          cache-from: type=registry,ref=cs50/codespace:buildcache-develop
-          cache-to: type=registry,ref=cs50/codespace:buildcache-develop,mode=max
-
-      - name: Push to Docker Hub (latest)
-        if: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          docker push cs50/codespace:${{ github.sha }}
-          docker push cs50/codespace:latest
-
-      - name: Push to Docker Hub (develop)
-        if: ${{ github.ref == 'refs/heads/develop' }}
-        run: |
-          docker push cs50/codespace:${{ github.sha }}
-          docker push cs50/codespace:develop
-
       - name: Log into GitHub Packages
         if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
         uses: docker/login-action@v2
@@ -56,6 +26,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build (latest)
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          export VCS_REF=$(git rev-parse HEAD)
+          npm install -g @devcontainers/cli
+          devcontainer build --workspace-folder . --image-name cs50/codespace:${{ github.sha }} --image-name cs50/codespace:latest
+
       - name: Push (latest) to GitHub Packages
         if: ${{ github.ref == 'refs/heads/main' }}
         run: |
@@ -63,6 +40,31 @@ jobs:
           docker tag cs50/codespace:latest ghcr.io/cs50/codespace:latest
           docker push ghcr.io/cs50/codespace:${{ github.sha }}
           docker push ghcr.io/cs50/codespace:latest
+
+      - name: Push to Docker Hub (latest)
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          docker push cs50/codespace:${{ github.sha }}
+          docker push cs50/codespace:latest
+
+      - name: Build (develop)
+        if: ${{ github.ref == 'refs/heads/develop' }}
+        run: |
+          export VCS_REF=$(git rev-parse HEAD)
+          npm install -g @devcontainers/cli
+          devcontainer build --workspace-folder . --image-name cs50/codespace:${{ github.sha }} --image-name cs50/codespace:develop
+
+      - name: Push (develop) to GitHub Packages
+        if: ${{ github.ref == 'refs/heads/develop' }}
+        run: |
+          docker tag cs50/codespace:${{ github.sha }} ghcr.io/cs50/codespace:develop
+          docker push ghcr.io/cs50/codespace:develop
+
+      - name: Push to Docker Hub (develop)
+        if: ${{ github.ref == 'refs/heads/develop' }}
+        run: |
+          docker push cs50/codespace:${{ github.sha }}
+          docker push cs50/codespace:develop
 
       - name: Tag main as latest
         if: ${{ github.ref == 'refs/heads/main' }}
@@ -86,9 +88,3 @@ jobs:
                 sha: context.sha
               })
             }
-
-      - name: Push (develop) to GitHub Packages
-        if: ${{ github.ref == 'refs/heads/develop' }}
-        run: |
-          docker tag cs50/codespace:${{ github.sha }} ghcr.io/cs50/codespace:develop
-          docker push ghcr.io/cs50/codespace:develop
